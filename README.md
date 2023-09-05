@@ -9,7 +9,7 @@ Instructions are extremely similar to those of A1:
 * `python -m pip install -r requirements.txt` (Replacing python with python3 or py - whatever works)
 
 ## Running the GUI
-
+# TESTTT does this save
 `python main.py`
 
 ## Running the Tests
