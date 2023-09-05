@@ -9,7 +9,6 @@ import json
 import sys
 import secrets
 from copy import copy
-# test change
 from constants import DrawMode
 from mountain import Mountain
 from mountain_manager import MountainManager
