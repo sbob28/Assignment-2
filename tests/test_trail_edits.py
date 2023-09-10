@@ -108,7 +108,7 @@ class TestTrailMethods(unittest.TestCase):
         my_follow = TrailSeries(m, Trail(None))
         t = TrailSplit(Trail(None), Trail(None), Trail(my_follow))
 
-        res = t.remove_branch()
-        self.assertIsInstance(res, TrailSeries)
+        res = t.remove_branch() #self.following is Trail(TrailSeries(m, Trail(None)))
+        self.assertIsInstance(res, TrailSeries)  #must return a trail series 
         self.assertEqual(res.mountain, m)
         self.assertEqual(res.following.store, None)
