@@ -10,8 +10,7 @@ from typing import TYPE_CHECKING, Union
 
 # Avoid circular imports for typing.
 if TYPE_CHECKING:
-    from personality import WalkerPersonality
-
+   from personality import WalkerPersonality, TopWalker, BottomWalker, LazyWalker, PersonalityDecision
 
 @dataclass
 class TrailSplit:
@@ -105,17 +104,25 @@ class Trail:
 
     def follow_path(self, personality: WalkerPersonality) -> None:
         """Follow a path and add mountains according to a personality."""
+        #sets current trail as the trail called
         current_trail = self
+
+        #whilst there is still a current trail continue progressing
         while current_trail:
+            #accesses the trail store 
             if current_trail.store:
+                #if there is multiple branches select branch according to personality 
                 if isinstance(current_trail.store, TrailSplit):
+                    # find selected branch 
                     selected_branch = personality.select_branch(current_trail.store.top, current_trail.store.bottom)
+                    #depending on the decision depends sets the current trail as the top bottom, or ends there 
                     if selected_branch == PersonalityDecision.TOP:
                         current_trail = current_trail.store.top
                     elif selected_branch == PersonalityDecision.BOTTOM:
                         current_trail = current_trail.store.bottom
                     elif selected_branch == PersonalityDecision.STOP:
                         return
+                #if it is a series we add the mountain and make the current trail its following trail 
                 elif isinstance(current_trail.store, TrailSeries):
                     personality.add_mountain(current_trail.store.mountain)
                     current_trail = current_trail.store.following
