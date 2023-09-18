@@ -312,17 +312,28 @@ class DoubleKeyTable(Generic[K1, K2, V]):
         """
         Returns number of elements in the hash table
         """
-        return sum(len(internal_table) if internal_table is not None else 0 for internal_table in self.internal_tables)
+        count = 0
+        for internal_table in self.internal_tables:
+            if internal_table is not None:
+                count += len(internal_table)
+        return count 
+
+    #uses a loop and an count variable to (hopefully) the same thing. 
+    # It iterates through the internal_tables
+    # checks if each table is not None
+    # and adds its length to the count.
+
+
+
+    # original code: return sum(len(internal_table) for internal_table in self.internal_tables if internl_table is not None)
+
     #calculates the total number of elements in the double hash table 
     # by summing the lengths of all internal hash tables
     # considering that some internal tables may be None
     # provides the count of key-value pairs stored in the double hash table.
-        """run
-        String representation.
-
-        Not required but may be a good testing tool.
-        """
+    
     def __str__(self) -> str:
+        
         result = ""
         for top_level_key in self.top_level_table.keys():
             result += f"Top-level key: {top_level_key}\n"
