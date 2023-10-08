@@ -2,15 +2,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from mountain import Mountain
-from enum import auto
-from base_enum import BaseEnum
+from data_structures.linked_stack import LinkedStack
 
 
 from typing import TYPE_CHECKING, Union
 
 # Avoid circular imports for typing.
 if TYPE_CHECKING:
-   from personality import WalkerPersonality, TopWalker, BottomWalker, LazyWalker, PersonalityDecision
+   from personality import WalkerPersonality
 
 @dataclass
 class TrailSplit:
@@ -103,40 +102,79 @@ class Trail:
         return Trail(TrailSplit(Trail(), Trail(), Trail()))
 
     def follow_path(self, personality: WalkerPersonality) -> None:
-        """Follow a path and add mountains according to a personality."""
-        #sets current trail as the trail called
-        current_trail = self
+        """Follow a path and add mountains according to a personality.
+        Complexity:
+        Best case: O(1) when first element doe not match any conditions
+        Worst case: O(n) where n is the total number of trails, in the path, as each element is processed."""
+        current_trail = LinkedStack()
+        current_trail.push(self.store)
 
-        #whilst there is still a current trail continue progressing
         while current_trail:
-            #accesses the trail store 
-            if current_trail.store:
-                #if there is multiple branches select branch according to personality 
-                if isinstance(current_trail.store, TrailSplit):
-                    # find selected branch 
-                    selected_branch = personality.select_branch(current_trail.store.top, current_trail.store.bottom)
-                    #depending on the decision depends sets the current trail as the top bottom, or ends there 
-                    if selected_branch == PersonalityDecision.TOP:
-                        current_trail = current_trail.store.top
-                    elif selected_branch == PersonalityDecision.BOTTOM:
-                        current_trail = current_trail.store.bottom
-                    elif selected_branch == PersonalityDecision.STOP:
-                        return
-                #if it is a series we add the mountain and make the current trail its following trail 
-                elif isinstance(current_trail.store, TrailSeries):
-                    personality.add_mountain(current_trail.store.mountain)
-                    current_trail = current_trail.store.following
-    
-        return
+            current = current_trail.pop()
+
+            if isinstance(current, TrailSplit):
+                decision = personality.select_branch(current.top, current.bottom).name
+                current_trail.push(current.following.store)
+
+                if decision == "TOP":
+                    current_trail.push(current.top.store)
+                elif decision == "BOTTOM":
+                    current_trail.push(current.bottom.store)
+                else:
+                    return
+
+            elif isinstance(current, TrailSeries):
+                personality.add_mountain(current.mountain)
+                current_trail.push(current.following.store)
 
 
     def collect_all_mountains(self) -> list[Mountain]:
         """Returns a list of all mountains on the trail."""
-        raise NotImplementedError()
+        collected_mountains = []
+        stack = LinkedStack()
 
-    def difficulty_maximum_paths(self, max_difficulty: int) -> list[list[Mountain]]: # Input to this should not exceed k > 50, at most 5 branches.
-        # 1008/2085 ONLY!
-        raise NotImplementedError()
+        stack.push(self)  
+
+        while not stack.is_empty():
+            current_trail = stack.pop()
+
+            if isinstance(current_trail.store, TrailSeries):
+                collected_mountains.append(current_trail.store.mountain)
+                if current_trail.store.following:
+                    stack.push(current_trail.store.following)  
+            elif isinstance(current_trail.store, TrailSplit):
+                if current_trail.store.top:
+                    stack.push(current_trail.store.top)
+                if current_trail.store.bottom:
+                    stack.push(current_trail.store.bottom)  
+                if current_trail.store.following:
+                    stack.push(current_trail.store.following)  
+
+        return collected_mountains
+
+    def difficulty_maximum_paths(self, max_difficulty: int) -> list[list[Mountain]]:
+        all_paths = []
+        stack = [(self, [], max_difficulty)]
+
+        while stack:
+            trail, current_path, remaining_difficulty = stack.pop()
+
+            if not trail:
+                all_paths.append(current_path)
+                continue
+
+            if isinstance(trail.store, TrailSeries):
+                if trail.store.mountain.difficulty_level <= remaining_difficulty:
+                    new_difficulty = remaining_difficulty - trail.store.mountain.difficulty_level
+                    stack.append((trail.store.following, current_path + [trail.store.mountain], new_difficulty))
+                
+                if trail.store.following:
+                    stack.append((trail.store.following, current_path, remaining_difficulty))
+            elif isinstance(trail.store, TrailSplit):
+                for next_trail in [trail.store.top, trail.store.bottom, trail.store.following]:
+                    stack.append((next_trail, current_path[:], remaining_difficulty))
+
+        return all_paths
 
     def difficulty_difference_paths(self, max_difference: int) -> list[list[Mountain]]: # Input to this should not exceed k > 50, at most 5 branches.
         # 1054 ONLY!

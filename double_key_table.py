@@ -5,7 +5,7 @@ from data_structures.hash_table import LinearProbeTable, FullError
 from data_structures.referential_array import ArrayR
 
 K1 = TypeVar('K1')
-K2 = TypeVar('K2')  
+K2 = TypeVar('K2')
 V = TypeVar('V')
 
 class DoubleKeyTable(Generic[K1, K2, V]):
@@ -20,6 +20,13 @@ class DoubleKeyTable(Generic[K1, K2, V]):
         - V:    Value Type.
 
     Unless stated otherwise, all methods have O(1) complexity.
+
+    #Best case complexity is O(1).
+    #only involves simple assignments and attribute initialization
+
+    #Worst case complexity is O(N), N is the length of 'sizes'
+    #because it involves accessing and initializing 'self.TABLE_SIZES' and 'self.array'
+    #based on the input list 'sizes,' which can be a linear operation
     """
 
     # No test case should exceed 1 million entries.
@@ -28,43 +35,21 @@ class DoubleKeyTable(Generic[K1, K2, V]):
     HASH_BASE = 31
 
     def __init__(self, sizes:list|None=None, internal_sizes:list|None=None) -> None:
-        self.table_size = 0 
-        #keep track of current number of internal hash tables
+        "Best and worst case complexity O(1)"
+        self.sizes = sizes
+        self.internal_sizes = internal_sizes
 
-        self.load_factor = 0.0 #to keep track of the load factor of data structure
-        # (measure of how full hash tables are)
-        # 0.0 means table is empty
+        if sizes is not None:
+            self.TABLE_SIZES = self.sizes
 
-        self.internal_tables = ArrayR() #array to store interal hash tables
-
-        self._initialize_table_sizes(sizes, internal_sizes)
-        #to set up the sizes of the top-lvel and internal hash tables 
-
-    def _initialize_table_sizes(self, sizes, internal_sizes):
-        if sizes is None:
-            self.sizes = self.TABLE_SIZES
+        if internal_sizes is not None:
+            self.internal_sizes = self.internal_sizes
         else:
-            self.sizes = sizes
-        # checks if sizes are provided for hash table (sizes) 
-       
+            self.internal_sizes = self.TABLE_SIZES
 
-        if internal_sizes is None:
-            self.internal.sizes = self.TABLE_SIZES
-        else:
-            self.internal_sizes = internal_sizes
-        # and the internal hash tables (internal_sizes)
-
-        #if size are not given then it uses TABLE_SIZE (predefined sizes)
-
-        self.top_level_table = LinearProbeTable(self.sizes[self.table_size])
-        #initialises 'top_level_table as new LinearProbeTable 
-        #with size from sizes and current table_size index
-
-        self.table_size += 1 
-        #incrementing the index for the sizes list to prepare it for next initialisation 
-        # with different size from sizes list??
-
-
+        self.size_index = 0
+        self.array = ArrayR(self.TABLE_SIZES[0])
+        self.count = 0
 
     def hash1(self, key: K1) -> int:
         """
@@ -74,23 +59,11 @@ class DoubleKeyTable(Generic[K1, K2, V]):
         """
 
         value = 0
-        #this initialised 'value' is used to accumulate hash value 
-        #as characters from 'key' processed
-
         a = 31415
-        #value is used in hash calculation as multiplier 
-
         for char in key:
-        #creates loop that iterates over each character 
-        # in the input key.
             value = (ord(char) + a * value) % self.table_size
-        # within the loop it calculates the new value of value using the formula
-        #by adding the code point of the character to a times the current value.
             a = a * self.HASH_BASE % (self.table_size - 1)
-        #updates the value of a for the next iteration.
-        #helps in creating a different hash value for each character in the key???
         return value
-        #represents the hash value for the input key1.
 
     def hash2(self, key: K2, sub_table: LinearProbeTable[K2, V]) -> int:
         """
@@ -112,50 +85,34 @@ class DoubleKeyTable(Generic[K1, K2, V]):
 
         :raises KeyError: When the key pair is not in the table, but is_insert is False.
         :raises FullError: When a table is full and cannot be inserted.
+
+            #best-case complexity is O(1) when the desired pos is found immediately without collisions.
+
+    #worst-case complexity is O(N)
+    #where N is the size of the hash table, as it may require iterating through the entire table if there are many collisions
+    #resulting in linear probing until an empty slot or a full table
         """
-        top_level_index = self.hash1(key1) 
-        #calculates the has index for key1 using hash1
-        #tells us the intial position in the top-level hash table
-
-        if top_level_index >= self.table_size:
-            #checks if top_level_index is within bounds 
-            # of available top-level hash tables 
-            # if index is greater than or equal to current number of top-lvl tables
-            # it means data structure needs to be expanded
-            if not is_insert:
-                raise KeyError("Pair not found")
-            #if operation is not an insertion
+        position = self.hash1(key1)
+       
+        for _ in range(self.table_size):
+            current_key, subtable = self.array[position] if self.array[position] else (None, None)
+           
+            if current_key is None:
+                if is_insert:
+                    subtable = LinearProbeTable(self.internal_sizes)
+                    subtable.hash = lambda key2: self.hash2(key2, subtable)
+                    self.array[position] = (key1, subtable)
+                    self.count += 1
+                    return position, subtable._linear_probe(key2, is_insert)
+                else:
+                    raise KeyError(key1)
+            elif current_key == key1:
+                return position, subtable._linear_probe(key2, is_insert)
             else:
-                self._create_internal_table(top_level_index)
-            #if it is insertion, it creates a new hash table  at the calculated to_level_index
-            #first time the pair with key1 is being inserted 
-            #corresponding internal table needs to be created??
+                position = (position + 1) % self.table_size
+               
+        raise FullError("Table is full")
 
-
-        internal_table = self.internal_tables[top_level_index]
-        internal_index = self.hash2(key2, internal_table)
-        #retrieves internal hash table associated with the calculated top_level_index
-        #this internal table is where actual key-value pair is tored/retirved
-
-        return top_level_index, internal_index
-        #returns tuple?? of two values??
-        #these indices are used to access or manipulate key-value pair
-        
-    def _create_internal_table(self, top_level_index: int) -> None:
-        # integer representing the index where internal hash table should insert 
-        # within internal_table array
-        #corresponds to top-level key
-        internal_size = self.internal_sizes[top_level_index]
-        # retrieves the size of the internal hash table based on top_level_index
-        # uses internal sizes to tell the size for specified top level key
-        # size indicates how many slots the internal hash table should have.
-        new_internal_table = LinearProbeTable(internal_size, self.hash2)
-        # new instance of the LinearProbeTable class is created as new_internal_table.
-        # internal hash table is initialized with the determined internal_size
-        # hash2 method (used for hashing the second key) is passed as the hash function for this table.
-        self.internal_tables.insert_at_index(top_level_index, new_internal_table)
-        # newly created internal hash table (new_internal_table) is inserted 
-        # at the specified top_level_index within the internal_tables array.
 
     def iter_keys(self, key:K1|None=None) -> Iterator[K1|K2]:
         """
@@ -163,28 +120,54 @@ class DoubleKeyTable(Generic[K1, K2, V]):
             Returns an iterator of all top-level keys in hash table
         key = k:
             Returns an iterator of all keys in the bottom-hash-table for k.
-        """
-        if key is None:
-            for top_level_key in self.top_level_table.keys():
-                yield top_level_key
-        else:
-            top_level_index = self.hash1(key)
-            if top_level_index < self.table_size:
-                internal_table = self.internal_tables[top_level_index]
-                for internal_key in internal_table.keys():
-                    yield internal_key
 
-    # provides an iterator that can be used to iterate 
-    # through either all top-level keys in the hash table
-    # or keys within a specific internal hash table
-    # based on the value of the key parameter.
+        # best-case complexity is O(1) when 'key' is found immediately
+        # at the expected pos in the hash table.
+
+        # worst-case complexity is O(N) in scenarios where there are many hash collisions
+        # as it may require iterating through the entire table or a subtable to find 'key'
+        # or to enumerate all keys when 'key' is None
+        # resulting in a linear time operation.
+        """
+       
+        if key is None:
+            for entry in self.array:
+                if entry:
+                    yield entry[0]
+            raise BaseException("No keys found in the hash table.")
+        else:
+            top_level_key_index = self.hash1(key)
+            entry = self.array[top_level_key_index]
+            if entry and entry[0] == key:
+                yield from entry[1].iter_keys()
+            else:
+                raise BaseException(f"Key '{key}' not found in the hash table.")
 
     def keys(self, key:K1|None=None) -> list[K1|K2]:
         """
         key = None: returns all top-level keys in the table.
         key = x: returns all bottom-level keys for top-level key x.
+
+        #best-case complexity is O(1) when 'key' is found immediately at the expected position
+        # in the table or subtable
+        # or when 'key' is None and there are no top-level keys.
+
+        # worst-case complexity is O(N) when there are many top-level keys and 'key' is None
+        # N represents the number of top-level keys in the hash table.
+        # as it may require iterating through the entire table to collect all top-level keys
+        # or O(M) when 'key' is specified
+        # where M is the number of top-level keys,
+        # as it may require searching through each subtable to find the bottom-level keys associated with 'key'.
         """
-        return list(self.iter_keys(key))
+        if key is None:
+            return [entry[0] for entry in self.array if entry is not None]
+        else:
+            for entry in self.array:
+                if entry is not None and entry[0] == key:
+                    return list(entry[1].keys())
+            return []
+
+
 
     def iter_values(self, key:K1|None=None) -> Iterator[V]:
         """
@@ -192,32 +175,55 @@ class DoubleKeyTable(Generic[K1, K2, V]):
             Returns an iterator of all values in hash table
         key = k:
             Returns an iterator of all values in the bottom-hash-table for k.
+
+    Best-case complexity O(1) when 'key' is found immediately at the expected pos
+    and when 'key' is None and there are no top lvll keys.
+
+    Worst-case complexity O(N) when key is none, where N is the number of top lvl keys,
+    as it may require iterating through the entire table to collect all values
         """
         if key is None:
-            for top_level_key in self.top_level_table.keys():
-                for internal_key in self.iter_keys(top_level_key):
-                    yield self[top_level_key, internal_key]
+            for entry in self.array:
+                if entry is not None:
+                    yield from entry[1].values()
         else:
-            top_level_index = self.hash1(key)
-            if top_level_index < self.table_size:
-                internal_table = self.internal_tables[top_level_index]
-                for internal_key in internal_table.keys():
-                    yield self[key, internal_key]
-        # iterator that can be used to iterate through either all values in the hash table 
-        # or values within a specific internal hash table 
-        # associated with a top-level key based on the value of the key parameter
-    
+            for entry in self.array:
+                if entry is not None and entry[0] == key:
+                    yield from entry[1].values()
+
+        raise KeyError(f"Key '{key}' not found in the hash table.")
+   
+
+
     def values(self, key:K1|None=None) -> list[V]:
         """
         key = None: returns all values in the table.
         key = x: returns all values for top-level key x.
-        """
-        return list(self.iter_values(key))
 
+            # best complexity O(1) when 'key' is found immediately at the expected pos
+            # and when 'key' is None and there are no top-level keys
+
+            # Worst complexityO(N) when 'key' is None, where N is the number of top-level keys,
+            # as it may require iterating through the entire table to collect all values
+        """
+        if key is None:
+            all_values = []
+            for entry in self.array:
+                if entry is not None:
+                    all_values.extend(entry[1].values())
+            return all_values
+        else:
+            top_level_key_index = self.hash1(key)
+            entry = self.array[top_level_key_index]
+            if entry is not None and entry[0] == key:
+                return list(entry[1].values())
+            else:
+                return []
+
+           
     def __contains__(self, key: tuple[K1, K2]) -> bool:
         """
         Checks to see if the given key is in the Hash Table
-
         :complexity: See linear probe.
         """
         try:
@@ -230,121 +236,155 @@ class DoubleKeyTable(Generic[K1, K2, V]):
     def __getitem__(self, key: tuple[K1, K2]) -> V:
         """
         Get the value at a certain key
-
         :raises KeyError: when the key doesn't exist.
-        """
-        top_level_key, internal_key = key
-        top_level_index, internal_index = self._linear_probe(top_level_key, internal_key, False)
-        return self.internal_tables[top_level_index][internal_index]
 
-    # retrieve the value associated with a specific key pair 
-    # and it handles error cases by raising a KeyError when the key pair is not found 
+        # Best case O(1) when the desired key is found immediately at  expected pos in the hash table.
+
+        # worstcase complexity O(N) when there are many hash collisions
+        # as it may require linear probing through the table to locate the desired key
+        # and then access the subtable to retrieve the value,
+        # resulting in a linear time operation in the worst case.
+        """
+        key1, key2 = key
+        position, _ = self._linear_probe(key1, key2, False)
+        return self.array[position][1][key2]
+
 
     def __setitem__(self, key: tuple[K1, K2], data: V) -> None:
         """
         Set an (key, value) pair in our hash table.
+
+        # Best case is O(1) when the desired pos for the key is found immediately without collisions.
+       
+        # Worst case is O(N) when there are many hash collisions and the table requires rehashing.
+        # Setting a key involves linear probing in the worst case
+        # rehashing operation can also be O(N) if all keys collide,
+        #  where N is the size of the hash table.
         """
+        position, _ = self._linear_probe(*key, True)
+        self.array[position][1][key[1]] = data
 
-        top_level_key, internal_key = key
-        top_level_index, internal_index = self._linear_probe(top_level_key, internal_key, True)
-        self.internal_tables[top_level_index][internal_index] = data
-
-        if len(self) > self.table_size / 2:
+        if len(self) > self.table_size // 2:
             self._rehash()
-    #inserts a key-value pair into the double hash table
-    # ensures that the load factor is within an acceptable range
-    # and performs rehashing when necessary 
+       
 
     def __delitem__(self, key: tuple[K1, K2]) -> None:
-        """
+
+        """  
         Deletes a (key, value) pair in our hash table.
 
         :raises KeyError: when the key doesn't exist.
-        """
-        top_level_key, internal_key = key
-        top_level_index, internal_index = self._linear_probe(top_level_key, internal_key, False)
-        del self.internal_tables[top_level_index][internal_index]
+ 
+        # best case O(1) when the desired position for the key is found immediately without collision/s.
 
-        if len(self.internal_tables[top_level_index]) == 0:
-            self.internal_tables[top_level_index] = None
+        # worst case O(N) in scenarios with many hash collisions
+        #  as it may involve linear probing and repositioning elements within the table
+        # resulting in a linear time operation in the worst case."""
 
-        if all(internal_table is None for internal_table in self.internal_tables):
-            self.table_size = 0
-        # ensures proper deletion of a key-value pair from the double hash table 
-        # while also managing the internal structure and table size 
-        # raises a KeyError if the specified key does not exist in the hash table.
-            
+        key1, key2 = key
+        position1, position2 = self._linear_probe(key1, key2, False)
+
+        if self.array[position1] is None:
+            raise KeyError(key1)
+
+        sub_table = self.array[position1][1]
+
+        if key2 in sub_table:
+            del sub_table[key2]
+
+            if not sub_table:
+                self.array[position1] = None
+                self.count -= 1
+
+            position2 = (position2 + 1) % sub_table.table_size
+            while sub_table.array[position2]:
+                k2, value = sub_table.array[position2]
+                sub_table.array[position2] = None
+
+                newpos = sub_table._linear_probe(k2, True)
+                sub_table.array[newpos] = (k2, value)
+                position2 = (position2 + 1) % sub_table.table_size
+
+        position1 = (position1 + 1) % self.table_size
+        while self.array[position1]:
+            k1, sub_table = self.array[position1]
+            self.array[position1] = None
+
+            newpos, _ = self._linear_probe(k1, key2, True)
+            self.array[newpos] = (k1, sub_table)
+            position1 = (position1 + 1) % self.table_size
+
+
+
     def _rehash(self) -> None:
-        """
+
+        """  
         Need to resize table and reinsert all values
 
         :complexity best: O(N*hash(K)) No probing.
         :complexity worst: O(N*hash(K) + N^2*comp(K)) Lots of probing.
-        Where N is len(self)
         """
-        old_internal_tables = self.internal_tables
-        old_table_size = self.table_size
-        self.internal_tables = ArrayR()
-        self.table_size = 0
-        self._initialize_table_sizes(self.sizes, self.internal_sizes)
 
-        for old_internal_table in old_internal_tables:
-            if old_internal_table is not None:
-                for key, value in old_internal_table:
-                    self[key, key] = value
+        current_table = self.array
+        self.size_index += 1
+        if self.size_index >= len(self.TABLE_SIZES):
+            return
+        new_size = self.TABLE_SIZES[self.size_index]
+        self.array = ArrayR[tuple[K1, V]](new_size)
+        self.count = 0
+       
+        for i in current_table:
+            if i is not None:
+                k1, val = i
+                if isinstance(val, LinearProbeTable):
+                    for n in val.array:
+                        if n is not None:
+                            k2, data = n
+                            self[(k1, k2)] = data
 
-        # code is responsible for resizing and rehashing the double hash table 
-        # to ensure it remains efficient as it grows in size
-        # ensures that all values are correctly reinserted into the resized hash table
-        # takes into acc best and worst scenarios ???
 
+    @property
     def table_size(self) -> int:
         """
         Return the current size of the table (different from the length)
+
+        #best and worst case O(1)
+        # simply returns the length of the 'array,'
+        # which is a constant-time operation regardless of the array size
         """
-        return len(self.top.level_table)
-    # a way to retrieve the size of the top-level hash table 
-    # in the double hash table structure
-    # represents the number of available slots for storing key-value pairs 
-   
-    
+        return len(self.array)
+
+
     def __len__(self) -> int:
         """
         Returns number of elements in the hash table
+
+    # best and worst case time complexity for this code is both O(1),
+    # as it directly returns the value of 'count,'
+    # which is a constant-time operation
+    # and does not depend on the number of elements in the hash table.
         """
-        count = 0
-        for internal_table in self.internal_tables:
-            if internal_table is not None:
-                count += len(internal_table)
-        return count 
-
-    #uses a loop and an count variable to (hopefully) the same thing. 
-    # It iterates through the internal_tables
-    # checks if each table is not None
-    # and adds its length to the count.
+        return self.count
 
 
 
-    # original code: return sum(len(internal_table) for internal_table in self.internal_tables if internl_table is not None)
-
-    #calculates the total number of elements in the double hash table 
-    # by summing the lengths of all internal hash tables
-    # considering that some internal tables may be None
-    # provides the count of key-value pairs stored in the double hash table.
-    
     def __str__(self) -> str:
-        
-        result = ""
-        for top_level_key in self.top_level_table.keys():
-            result += f"Top-level key: {top_level_key}\n"
-            for internal_key in self.iter_keys(top_level_key):
-                result += f"  Internal key: {internal_key}, Value: {self[top_level_key, internal_key]}\n"
+        """
+        String representation.
+
+        Not required but may be a good testing tool.
+
+        # best case O(N) when there are many elements in the hash table,
+        # as it iterates through the 'array' and subtables to build the string representation,
+        # resulting in linear time complexity in the best case.
+
+        # worst case O(N) for the same reason as the best case,
+        # as it always needs to process all elements and subtables to create the string representation.
+        """
+        result = "{\n"
+        for entry in self.array:
+            if entry is not None:
+                key1, sub_table = entry
+                result += f"  '{key1}': {str(sub_table)},\n"
+        result += "}"
         return result
-    #generates representation of the double hash table 
-    # by iterating through its top-level 
-    # and internal keys and values 
-    # and formatting them for display
-
-
-
-
